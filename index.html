@@ -301,9 +301,16 @@ function say(text,rate=0.85){
 /* 單獨唸子音時，TTS 會唸成字母名稱（r→are），改用接近發音的拼法 */
 const PH={b:'buh',c:'kuh',d:'duh',f:'fff',g:'guh',h:'huh',j:'juh',k:'kuh',l:'lll',m:'mmm',n:'nnn',p:'puh',q:'kwuh',
   r:'rrr',s:'sss',t:'tuh',v:'vvv',w:'wuh',x:'ks',y:'yuh',z:'zzz',sh:'shh',ch:'chuh',th:'thuh',wh:'wuh',ph:'fff',ck:'kuh'};
-/* 只有子音的段落（如 r）：單一字母先唸字母名稱，再唸它的音；有母音的段落（如 at）直接唸 */
+/* 「元音+子音」兩個字母且不是真單字（ap、ig、ob…）時，語音引擎會逐字母唸成 A-P，
+   所以把最後的子音重複一次（app、igg），讓它被當成一個字唸 */
+const REAL2=new Set(['at','an','am','ad','as','is','it','in','if','on','of','up','us','ox','ax','ex','ah','oh','uh','eh']);
+function rimeSpell(seg){
+  if(seg.length===2&&/^[aeiou][b-df-hj-np-tv-z]$/.test(seg)&&!REAL2.has(seg))return seg+seg[1];
+  return seg;
+}
+/* 只有子音的段落（如 r）：單一字母先唸字母名稱，再唸它的音；有母音的段落（如 ap）直接唸 */
 async function say2(seg,rate){
-  if(/[aeiou]/.test(seg)||(seg.length>1&&/y/.test(seg.slice(1))))return say(seg,rate);
+  if(/[aeiou]/.test(seg)||(seg.length>1&&/y/.test(seg.slice(1))))return say(rimeSpell(seg),rate);
   if(seg.length===1){await say(seg.toUpperCase(),rate);await sleep(250)}
   return say(PH[seg]||seg+'uh',rate);
 }
