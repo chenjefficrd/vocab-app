@@ -301,8 +301,10 @@ function say(text,rate=0.85){
 /* 單獨唸子音時，TTS 會唸成字母名稱（r→are），改用接近發音的拼法 */
 const PH={b:'buh',c:'kuh',d:'duh',f:'fff',g:'guh',h:'huh',j:'juh',k:'kuh',l:'lll',m:'mmm',n:'nnn',p:'puh',q:'kwuh',
   r:'rrr',s:'sss',t:'tuh',v:'vvv',w:'wuh',x:'ks',y:'yuh',z:'zzz',sh:'shh',ch:'chuh',th:'thuh',wh:'wuh',ph:'fff',ck:'kuh'};
-function say2(seg,rate){
+/* 只有子音的段落（如 r）：單一字母先唸字母名稱，再唸它的音；有母音的段落（如 at）直接唸 */
+async function say2(seg,rate){
   if(/[aeiou]/.test(seg)||(seg.length>1&&/y/.test(seg.slice(1))))return say(seg,rate);
+  if(seg.length===1){await say(seg.toUpperCase(),rate);await sleep(250)}
   return say(PH[seg]||seg+'uh',rate);
 }
 function lev(a,b){
