@@ -61,6 +61,9 @@ label{display:block;font-size:13px;font-weight:700;color:var(--sub);margin:12px 
 .syl.on{background:var(--orange2);border-color:var(--orange);color:#fff;transform:scale(1.12)}
 .syl.c0{color:var(--blue)}.syl.c1{color:var(--pink)}.syl.c2{color:var(--green)}.syl.c3{color:var(--purple)}
 .syl.on{color:#fff}
+.syl small{display:block;font-size:16px;font-weight:600;color:var(--sub);line-height:1.2;margin-top:2px}
+.syl.on small{color:#fff}
+.kk{font-size:15px;font-weight:600;color:var(--sub);margin-left:6px}
 .bigw{font-size:52px;font-weight:900;text-align:center;margin:6px 0}
 .join{display:inline-flex}
 .join .syl{border-radius:0;border-width:3px 0;padding:8px 6px;margin:0}
@@ -181,6 +184,34 @@ async function lookupZh(w){
     return t;
   }catch(e){return null}
 }
+/* IPA → KK 音標（近似轉換）。回傳不含斜線的 KK 字串 */
+function ipa2kk(s){
+  s=s.replace(/[\/\[\]ˈˌ.ː‿()]/g,'');
+  const m=[['əʊ','o'],['oʊ','o'],['eɪ','e'],['ɪə','ɪr'],['ɛə','ɛr'],['ʊə','ʊr'],['ɜ','ɝ'],['ɒ','ɑ'],['ɹ','r'],['ɡ','g'],
+    ['ɫ','l'],['ɾ','t'],['ɐ','ʌ'],['ʔ',''],['ɑe','aɪ']];
+  for(const [a,b] of m)s=s.split(a).join(b);
+  return s;
+}
+/* 回傳 KK 字串；'' 表示查不到；null 表示網路失敗 */
+async function lookupKK(w){
+  try{
+    const d=await fetchJSON('https://api.dictionaryapi.dev/api/v2/entries/en/'+encodeURIComponent(w));
+    if(!Array.isArray(d))return '';
+    const ph=d.flatMap(e=>e.phonetics||[]).filter(p=>p.text);
+    const us=ph.find(p=>/-us\./.test(p.audio||''))||ph.find(p=>!/-uk\./.test(p.audio||''))||ph[0];
+    return us?ipa2kk(us.text):'';
+  }catch(e){return null}
+}
+/* 單音節字的 KK 依母音切成「開頭子音 / 韻母」，對應 r-at 這種拆法 */
+const isVTok=t=>/^(aɪ|aʊ|ɔɪ|[ɑæɛɪʊʌəɔeouiɚɝ])$/.test(t);
+function segKK(x){
+  const a=sylOf(x);
+  if(!x.kk||a.length!==2||/[aeiou]/.test(a[0].replace(/^qu/,'q')))return null;
+  const t=[];
+  for(let i=0;i<x.kk.length;){const m=x.kk.slice(i).match(/^(tʃ|dʒ|aɪ|aʊ|ɔɪ|[\s\S])/u);t.push(m[1]);i+=m[1].length}
+  const k=t.findIndex(isVTok);
+  return k<1?null:[t.slice(0,k).join(''),t.slice(k).join('')];
+}
 /* 字典上的音節數；0 表示查不到 */
 async function lookupCount(w){
   try{
@@ -214,6 +245,12 @@ async function enrich(x,force){
     x.tried=true;
     if(z){x.zh=z;ch=true}
   }
+  if(!x.kk&&(force||!x.kkTried)){
+    const k=await lookupKK(x.w);
+    if(k===null)return 'off';
+    x.kkTried=true;
+    if(k){x.kk=k;ch=true}
+  }
   if(!x.sylFixed){
     const n=await lookupCount(x.w);
     if(n){
@@ -230,11 +267,12 @@ async function enrichAll(){
   if(enriching)return;
   enriching=true;
   let n=0;
-  for(const x of words.filter(w=>(!w.zh&&!w.tried)||!w.sylFixed)){
+  for(const x of words.filter(w=>(!w.zh&&!w.tried)||(!w.kk&&!w.kkTried)||!w.sylFixed)){
     const r=await enrich(x);
     if(r==='off')break;
     if(r)n++;
     if(view==='list')renderList();
+    await sleep(600);
   }
   enriching=false;
   return n;
@@ -307,8 +345,10 @@ function judge(target,alts){
 let tt;
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1800)}
 const starStr=n=>'★'.repeat(n)+'☆'.repeat(3-n);
+const kkStr=x=>x.kk?`/${esc(x.kk)}/`:'';
 function sylHTML(x,on=-1,cls=''){
-  return sylOf(x).map((s,i)=>`<span class="syl c${i%4} ${i===on?'on':''} ${cls}" data-i="${i}">${esc(s)}</span>`).join('');
+  const sk=segKK(x);
+  return sylOf(x).map((s,i)=>`<span class="syl c${i%4} ${i===on?'on':''} ${cls}" data-i="${i}">${esc(s)}${sk?`<small>${esc(sk[i])}</small>`:''}</span>`).join('');
 }
 
 /* ---------- 畫面 ---------- */
@@ -329,7 +369,7 @@ function renderList(){
     <div class="card row" data-id="${x.id}">
       <button class="round" data-act="say">🔊</button>
       <div class="grow" data-act="practice">
-        <div class="w">${esc(x.w)}</div>
+        <div class="w">${esc(x.w)}<span class="kk">${kkStr(x)}</span></div>
         <div class="zh">${esc(sylOf(x).join(' · '))}${x.zh?' ｜ '+esc(x.zh):(!x.tried?' ｜ 🔍 查詢中…':'')}</div>
         <div class="stars">${starStr(x.stars)}</div>
       </div>
@@ -377,6 +417,7 @@ function openEdit(id){
     <label>英文</label><input id="eW" value="${esc(x.w)}" autocapitalize="off">
     <label>中文意思</label><input id="eZ" value="${esc(x.zh)}">
     <label>拆音（用 - 分開，例如 r-at、el-e-phant）</label><input id="eS" value="${esc(x.syl)}" autocapitalize="off">
+    <label>KK 音標（不用打斜線）</label><input id="eK" value="${esc(x.kk||'')}" autocapitalize="off">
     <div class="btns"><button class="btn ghost" id="eAuto">🔍 自動查詢中文和音節</button></div>
     <div class="btns"><button class="btn ghost" id="eC">取消</button><button class="btn green" id="eOk">儲存</button></div>
     <div class="btns"><button class="btn ghost" id="eD" style="color:var(--red)">刪除這個單字</button></div>
@@ -389,9 +430,10 @@ function openEdit(id){
     const w=$('#eW').value.trim().toLowerCase().replace(/[^a-z]/g,'');
     if(!w)return toast('請先輸入英文');
     toast('查詢中…');
-    const [z,n]=await Promise.all([lookupZh(w),lookupCount(w)]);
-    if(z===null)return toast('連不上網路，稍後再試');
+    const [z,n,k]=await Promise.all([lookupZh(w),lookupCount(w),lookupKK(w)]);
+    if(z===null&&k===null)return toast('連不上網路，稍後再試');
     if(z)$('#eZ').value=z;
+    if(k)$('#eK').value=k;
     const a=syllabify(w);
     $('#eS').value=(n?fitSyl(a,n):a).join('-');
     toast(z?'已填入，確認後按儲存':'查不到中文，音節已更新');
@@ -401,7 +443,7 @@ function openEdit(id){
     if(!w)return toast('請輸入英文單字');
     let sy=$('#eS').value.trim().toLowerCase().replace(/[^a-z-]/g,'');
     if(sy.replace(/-/g,'')!==w.replace(/'/g,''))sy=syllabify(w).join('-');
-    Object.assign(x,{w,zh:$('#eZ').value.trim(),syl:sy,tried:true,sylFixed:true});
+    Object.assign(x,{w,zh:$('#eZ').value.trim(),syl:sy,kk:$('#eK').value.trim().replace(/[\/\[\]]/g,''),tried:true,kkTried:true,sylFixed:true});
     save();s.classList.remove('show');go(view);
   };
   $('#eD').onclick=()=>{
@@ -424,6 +466,7 @@ function renderReview(){
     <p class="sub">第 ${R.i+1} / ${R.q.length} 張　${starStr(x.stars)}</p>
     <div class="card" style="padding:22px 12px">
       <div class="bigw">${esc(x.w)}</div>
+      <div class="sub" style="font-size:20px">${kkStr(x)}</div>
       <div class="sylrow" style="margin:8px 0 4px">${sylHTML(x)}</div>
       <div class="sub" style="font-size:18px;min-height:28px">${R.zh?esc(x.zh||'（沒有輸入中文）'):''}</div>
     </div>
@@ -459,6 +502,7 @@ function renderP(){
   if(st===0){
     body=`<div class="title">先仔細聽 👂</div>
       <div class="bigw" style="margin-top:30px">${esc(x.w)}</div>
+      <div class="sub" style="font-size:22px">${kkStr(x)}</div>
       <div class="sub">${esc(x.zh)}</div>
       <div class="spacer"></div>
       <div class="btns"><button class="btn blue" id="a1">🔊 正常速度</button><button class="btn pink" id="a2">🐢 慢慢聽</button></div>`;
@@ -485,6 +529,7 @@ function renderP(){
     }
     body=`<div class="title">換你唸囉！🎤</div>
       <div class="bigw" style="margin-top:14px">${esc(x.w)}</div>
+      <div class="sub" style="font-size:18px">${kkStr(x)}</div>
       <div class="sylrow" style="margin:4px 0">${sylHTML(x)}</div>
       <button class="mic ${P.rec?'rec':''}" id="mic">${P.rec?'👂':'🎤'}</button>
       <div class="sub">${P.rec?'聽你唸中…':'按一下麥克風，然後唸出單字'}</div>
