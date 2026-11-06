@@ -93,7 +93,7 @@ label{display:block;font-size:13px;font-weight:700;color:var(--sub);margin:12px 
 </style>
 </head>
 <body>
-<header><h1 id="ttl">📚 單字小天地 <small style="font-size:11px;color:var(--sub);font-weight:500">v7</small></h1><div class="badge" id="badge">⭐ 0</div></header>
+<header><h1 id="ttl">📚 單字小天地 <small style="font-size:11px;color:var(--sub);font-weight:500">v8</small></h1><div class="badge" id="badge">⭐ 0</div></header>
 <main id="main"></main>
 <nav>
   <button data-v="list"><span>📖</span>單字本</button>
@@ -322,17 +322,28 @@ function lev(a,b){
   return d[a.length][b.length];
 }
 /* 回傳 null=不支援, undefined=失敗/沒權限, []=沒聽到, [..]=候選文字 */
+let curRec=null;
+function stopListen(){
+  const r=curRec;if(!r)return;
+  try{r.stop()}catch(e){}
+  setTimeout(()=>{try{r.abort()}catch(e){}},700);
+}
 function listen(){
   return new Promise(res=>{
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR)return res(null);
-    let done=false;const fin=v=>{if(!done){done=true;res(v)}};
+    let done=false,timer;
+    const fin=v=>{if(!done){done=true;clearTimeout(timer);curRec=null;res(v)}};
     try{
-      const r=new SR();r.lang='en-US';r.maxAlternatives=5;r.interimResults=false;
-      r.onresult=e=>fin([...e.results[0]].map(a=>a.transcript));
-      r.onerror=e=>fin(e.error==='no-speech'?[]:undefined);
+      const r=new SR();r.lang='en-US';r.maxAlternatives=5;r.interimResults=false;r.continuous=false;
+      curRec=r;
+      r.onresult=e=>{fin([...e.results[0]].map(a=>a.transcript));try{r.stop()}catch(_){}};
+      r.onspeechend=()=>{try{r.stop()}catch(_){}};
+      r.onerror=e=>fin(e.error==='no-speech'||e.error==='aborted'?[]:undefined);
       r.onend=()=>fin([]);
       r.start();
+      /* 有些手機不會自己停止，最多聽 6 秒就強制結束 */
+      timer=setTimeout(()=>{stopListen();setTimeout(()=>fin([]),1200)},6000);
     }catch(e){fin(undefined)}
   });
 }
@@ -501,7 +512,7 @@ function openPractice(id){
   autoStage();
 }
 function closePractice(){
-  runId++;P=null;speechSynthesis&&speechSynthesis.cancel();
+  runId++;stopListen();P=null;speechSynthesis&&speechSynthesis.cancel();
   $('#practice').classList.remove('show');go(view);
 }
 const cur=()=>words.find(w=>w.id===P.id);
@@ -541,7 +552,7 @@ function renderP(){
       <div class="sub" style="font-size:18px">${kkStr(x)}</div>
       <div class="sylrow" style="margin:4px 0">${sylHTML(x)}</div>
       <button class="mic ${P.rec?'rec':''}" id="mic">${P.rec?'👂':'🎤'}</button>
-      <div class="sub">${P.rec?'聽你唸中…':'按一下麥克風，然後唸出單字'}</div>
+      <div class="sub">${P.rec?'聽你唸中…唸完再按一次可停止':'按一下麥克風，然後唸出單字'}</div>
       ${res}
       <div class="spacer"></div>
       ${r&&r.kind==='unsup'?`<div class="btns"><button class="btn ghost" id="self0">再練習</button><button class="btn green" id="self1">我唸得很好 ✓</button></div>`:''}
@@ -609,7 +620,7 @@ function award(score){
   save();
 }
 async function doMic(){
-  if(P.rec)return;
+  if(P.rec){stopListen();return}
   const x=cur();
   speechSynthesis.cancel();
   P.rec=true;P.res=null;renderP();
