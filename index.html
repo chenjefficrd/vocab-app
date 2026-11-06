@@ -110,7 +110,13 @@ const KEY='vocab.v1';
 /* ---------- 資料 ---------- */
 let words=load();
 function load(){
-  try{const d=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(d))return d}catch(e){}
+  try{
+    const d=JSON.parse(localStorage.getItem(KEY));
+    if(Array.isArray(d)){
+      d.forEach(x=>{if(!x.syl.includes('-')){const s=splitOR(x.w);if(s.length>1)x.syl=s.join('-')}});
+      return d;
+    }
+  }catch(e){}
   return [['apple','蘋果'],['banana','香蕉'],['elephant','大象']].map(([w,zh])=>mk(w,zh));
 }
 function save(){try{localStorage.setItem(KEY,JSON.stringify(words))}catch(e){}}
@@ -123,9 +129,16 @@ const sylOf=x=>x.syl.split('-').filter(Boolean);
 const totalStars=()=>words.reduce((a,x)=>a+x.stars,0);
 
 /* ---------- 簡易音節切分（可手動修正） ---------- */
+/* 單音節字照老師的教法拆成「開頭子音 + 韻母」，例如 r-at、st-op、sh-ip */
+function splitOR(w){
+  let i=0;
+  if(w.startsWith('qu'))i=2;
+  else while(i<w.length&&!'aeiou'.includes(w[i])&&!(w[i]==='y'&&i>0))i++;
+  return i>0&&i<w.length?[w.slice(0,i),w.slice(i)]:[w];
+}
 function syllabify(w){
   w=w.toLowerCase().replace(/[^a-z]/g,'');
-  if(w.length<=3)return [w];
+  if(w.length<=3)return splitOR(w);
   const isV=(c,i)=>'aeiou'.includes(c)||(c==='y'&&i>0);
   const silentE=w.endsWith('e')&&!isV(w[w.length-2],w.length-2)&&!/[^aeiouy]le$/.test(w);
   const end=silentE?w.length-1:w.length;
@@ -133,7 +146,7 @@ function syllabify(w){
   for(let i=0;i<end;){
     if(isV(w[i],i)){let j=i;while(j<end&&isV(w[j],j))j++;g.push([i,j]);i=j}else i++;
   }
-  if(g.length<=1)return [w];
+  if(g.length<=1)return splitOR(w);
   const cuts=[];
   for(let k=0;k<g.length-1;k++){
     const a=g[k][1],b=g[k+1][0],n=b-a,cl=w.slice(a,b);
@@ -189,7 +202,8 @@ function fitSyl(a,n){
     const p=a[i].search(/(i[aeou]|u[ao]|eo)/)+1;
     a.splice(i,1,a[i].slice(0,p),a[i].slice(p));
   }
-  return a.filter(Boolean);
+  a=a.filter(Boolean);
+  return a.length===1?splitOR(a[0]):a;
 }
 /* 回傳 true=有更新, false=沒變, 'off'=網路失敗 */
 async function enrich(x,force){
@@ -245,6 +259,13 @@ function say(text,rate=0.85){
     setTimeout(fin,6000);
     speechSynthesis.speak(u);
   });
+}
+/* 單獨唸子音時，TTS 會唸成字母名稱（r→are），改用接近發音的拼法 */
+const PH={b:'buh',c:'kuh',d:'duh',f:'fff',g:'guh',h:'huh',j:'juh',k:'kuh',l:'lll',m:'mmm',n:'nnn',p:'puh',q:'kwuh',
+  r:'rrr',s:'sss',t:'tuh',v:'vvv',w:'wuh',x:'ks',y:'yuh',z:'zzz',sh:'shh',ch:'chuh',th:'thuh',wh:'wuh',ph:'fff',ck:'kuh'};
+function say2(seg,rate){
+  if(/[aeiou]/.test(seg)||(seg.length>1&&/y/.test(seg.slice(1))))return say(seg,rate);
+  return say(PH[seg]||seg+'uh',rate);
 }
 function lev(a,b){
   const d=Array.from({length:a.length+1},(_,i)=>[i]);
@@ -355,7 +376,7 @@ function openEdit(id){
   s.innerHTML=`<div class="pane">
     <label>英文</label><input id="eW" value="${esc(x.w)}" autocapitalize="off">
     <label>中文意思</label><input id="eZ" value="${esc(x.zh)}">
-    <label>音節（用 - 分開，例如 el-e-phant）</label><input id="eS" value="${esc(x.syl)}" autocapitalize="off">
+    <label>拆音（用 - 分開，例如 r-at、el-e-phant）</label><input id="eS" value="${esc(x.syl)}" autocapitalize="off">
     <div class="btns"><button class="btn ghost" id="eAuto">🔍 自動查詢中文和音節</button></div>
     <div class="btns"><button class="btn ghost" id="eC">取消</button><button class="btn green" id="eOk">儲存</button></div>
     <div class="btns"><button class="btn ghost" id="eD" style="color:var(--red)">刪除這個單字</button></div>
@@ -442,8 +463,8 @@ function renderP(){
       <div class="spacer"></div>
       <div class="btns"><button class="btn blue" id="a1">🔊 正常速度</button><button class="btn pink" id="a2">🐢 慢慢聽</button></div>`;
   }else if(st===1){
-    body=`<div class="title">一個音節一個音節 ✂️</div>
-      <div class="sub">${n>1?'點每一格都可以聽，再跟著唸':'這個單字只有一個音節'}</div>
+    body=`<div class="title">一段一段拆開唸 ✂️</div>
+      <div class="sub">${n>1?'點每一格都可以聽，再跟著唸':'這個單字不需要拆開'}</div>
       <div class="sylrow" id="sylrow">${sylHTML(x)}</div>
       <div class="spacer"></div>
       <div class="btns"><button class="btn pink" id="a1">▶ 自動示範</button></div>`;
@@ -490,7 +511,7 @@ function bindP(){
   if(st===0){a1.onclick=()=>say(x.w,.85);a2.onclick=()=>say(x.w,.45)}
   if(st===1){
     a1.onclick=()=>playSyl();
-    $('#sylrow').onclick=e=>{const s=e.target.closest('.syl');if(!s)return;const i=+s.dataset.i;hl(i);say(sylOf(x)[i],.5).then(()=>hl(-1))};
+    $('#sylrow').onclick=e=>{const s=e.target.closest('.syl');if(!s)return;const i=+s.dataset.i;hl(i);say2(sylOf(x)[i],.5).then(()=>hl(-1))};
   }
   if(st===2){a1.onclick=()=>playJoin();a2.onclick=()=>say(x.w,.85)}
   if(st===3){
@@ -516,7 +537,7 @@ async function playSyl(){
   const my=++runId,x=cur(),a=sylOf(x);
   for(let i=0;i<a.length;i++){
     if(my!==runId)return;
-    hl(i);await say(a[i],.5);await sleep(350);
+    hl(i);await say2(a[i],.5);await sleep(350);
   }
   if(my===runId){hl(-1)}
 }
