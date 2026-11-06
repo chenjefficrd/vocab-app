@@ -93,7 +93,7 @@ label{display:block;font-size:13px;font-weight:700;color:var(--sub);margin:12px 
 </style>
 </head>
 <body>
-<header><h1 id="ttl">📚 單字小天地</h1><div class="badge" id="badge">⭐ 0</div></header>
+<header><h1 id="ttl">📚 單字小天地 <small style="font-size:11px;color:var(--sub);font-weight:500">v7</small></h1><div class="badge" id="badge">⭐ 0</div></header>
 <main id="main"></main>
 <nav>
   <button data-v="list"><span>📖</span>單字本</button>
@@ -625,7 +625,10 @@ async function doMic(){
 go('list');
 enrichAll();
 if('serviceWorker' in navigator&&location.protocol!=='file:'){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+  const had=!!navigator.serviceWorker.controller;
+  /* 有新版時自動重新載入，不用手動關掉 APP 兩次 */
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had)location.reload()});
+  navigator.serviceWorker.register('sw.js').then(r=>r.update()).catch(()=>{});
 }
 </script>
 </body>
