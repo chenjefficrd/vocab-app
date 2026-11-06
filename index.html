@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>單字小天地</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="單字小天地">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#fff8ee;--card:#fff;--ink:#3a2f28;--sub:#8a7b70;--line:#f0e3d2;
+  --orange:#ff8a3d;--orange2:#ffb347;--green:#3ec47c;--blue:#4aa3ff;--pink:#ff6b9d;--red:#ef5350;--purple:#8e6bff;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#1f1a16;--card:#2b2420;--ink:#f6ece2;--sub:#a99a8d;--line:#3d332c}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+body{display:flex;flex-direction:column;overscroll-behavior:none;user-select:none;-webkit-user-select:none}
+header{padding:calc(14px + env(safe-area-inset-top)) 18px 10px;display:flex;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:22px}
+.badge{background:var(--card);border:2px solid var(--line);border-radius:99px;padding:4px 12px;font-weight:700;font-size:14px}
+main{flex:1;overflow-y:auto;padding:4px 16px 24px;-webkit-overflow-scrolling:touch}
+nav{display:flex;background:var(--card);border-top:2px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;padding:10px 0 8px;font-size:12px;color:var(--sub);font-weight:700;display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button span{font-size:24px}
+nav button.on{color:var(--orange)}
+.card{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:14px 16px;margin-bottom:12px}
+.row{display:flex;align-items:center;gap:12px}
+.grow{flex:1;min-width:0}
+.w{font-size:22px;font-weight:800}
+.zh{font-size:14px;color:var(--sub);margin-top:2px}
+.stars{font-size:13px;letter-spacing:1px;color:var(--orange2)}
+.round{width:48px;height:48px;border-radius:50%;border:0;background:var(--blue);color:#fff;font-size:22px;flex:none;box-shadow:0 3px 0 rgba(0,0,0,.15)}
+.round:active{transform:translateY(2px);box-shadow:none}
+.btn{border:0;border-radius:16px;padding:14px 18px;font-size:17px;font-weight:800;color:#fff;background:var(--orange);box-shadow:0 4px 0 rgba(0,0,0,.15);width:100%}
+.btn:active{transform:translateY(3px);box-shadow:none}
+.btn.green{background:var(--green)}.btn.blue{background:var(--blue)}.btn.pink{background:var(--pink)}.btn.purple{background:var(--purple)}
+.btn.ghost{background:var(--card);color:var(--ink);border:2px solid var(--line);box-shadow:none}
+.btn[disabled]{opacity:.5}
+.btns{display:flex;gap:10px;margin-top:12px}
+.btns .btn{flex:1;padding:14px 8px}
+.ico{border:0;background:none;font-size:20px;padding:6px;color:var(--sub)}
+textarea,input{width:100%;font:inherit;font-size:17px;border:2px solid var(--line);border-radius:14px;padding:12px;background:var(--card);color:var(--ink);user-select:text;-webkit-user-select:text}
+textarea{min-height:170px;resize:vertical}
+label{display:block;font-size:13px;font-weight:700;color:var(--sub);margin:12px 0 4px}
+.hint{font-size:13px;color:var(--sub);line-height:1.6;margin:8px 2px}
+.empty{text-align:center;color:var(--sub);padding:50px 10px;line-height:1.8}
+.empty b{font-size:46px;display:block}
+
+/* syllables */
+.sylrow{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin:18px 0}
+.syl{font-size:40px;font-weight:800;padding:8px 16px;border-radius:16px;background:var(--card);border:3px solid var(--line);transition:.15s;color:var(--ink)}
+.syl.on{background:var(--orange2);border-color:var(--orange);color:#fff;transform:scale(1.12)}
+.syl.c0{color:var(--blue)}.syl.c1{color:var(--pink)}.syl.c2{color:var(--green)}.syl.c3{color:var(--purple)}
+.syl.on{color:#fff}
+.bigw{font-size:52px;font-weight:900;text-align:center;margin:6px 0}
+.join{display:inline-flex}
+.join .syl{border-radius:0;border-width:3px 0;padding:8px 6px;margin:0}
+.join .syl:first-child{border-radius:16px 0 0 16px;border-left-width:3px;padding-left:14px}
+.join .syl:last-child{border-radius:0 16px 16px 0;border-right-width:3px;padding-right:14px}
+
+/* practice overlay */
+#practice,#sheet{position:fixed;inset:0;background:var(--bg);z-index:10;display:none;flex-direction:column;padding-top:env(safe-area-inset-top)}
+#practice.show,#sheet.show{display:flex}
+#sheet{background:rgba(0,0,0,.45);justify-content:flex-end;padding:0}
+#sheet .pane{background:var(--bg);border-radius:24px 24px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));max-height:90%;overflow:auto}
+.ptop{display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+.steps{display:flex;gap:6px;justify-content:center;margin:2px 0 6px}
+.dot{width:34px;height:8px;border-radius:9px;background:var(--line)}
+.dot.done{background:var(--green)}.dot.now{background:var(--orange)}
+.pbody{flex:1;overflow:auto;padding:6px 20px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column}
+.title{text-align:center;font-size:20px;font-weight:800;margin:8px 0 0}
+.sub{text-align:center;color:var(--sub);font-size:14px;margin:4px 0}
+.mic{width:120px;height:120px;border-radius:50%;border:0;background:var(--red);color:#fff;font-size:54px;margin:18px auto;display:block;box-shadow:0 6px 0 rgba(0,0,0,.18)}
+.mic.rec{animation:pulse 1s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,83,80,.6)}100%{box-shadow:0 0 0 30px rgba(239,83,80,0)}}
+.result{text-align:center;font-size:20px;font-weight:800;margin:8px 0}
+.result small{display:block;font-size:14px;color:var(--sub);font-weight:500;margin-top:4px}
+.spacer{flex:1}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#333;color:#fff;padding:10px 18px;border-radius:99px;font-size:14px;z-index:30;opacity:0;transition:.3s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header><h1 id="ttl">📚 單字小天地</h1><div class="badge" id="badge">⭐ 0</div></header>
+<main id="main"></main>
+<nav>
+  <button data-v="list"><span>📖</span>單字本</button>
+  <button data-v="review"><span>🎴</span>複習</button>
+  <button data-v="add"><span>➕</span>新增單字</button>
+</nav>
+<div id="practice"></div>
+<div id="sheet"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const KEY='vocab.v1';
+
+/* ---------- 資料 ---------- */
+let words=load();
+function load(){
+  try{const d=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(d))return d}catch(e){}
+  return [['apple','蘋果'],['banana','香蕉'],['elephant','大象']].map(([w,zh])=>mk(w,zh));
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(words))}catch(e){}}
+function mk(w,zh,syl){
+  w=w.toLowerCase();
+  return{id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),w:w.replace(/-/g,''),zh:zh||'',
+    syl:syl||syllabify(w.replace(/-/g,'')).join('-'),stars:0};
+}
+const sylOf=x=>x.syl.split('-').filter(Boolean);
+const totalStars=()=>words.reduce((a,x)=>a+x.stars,0);
+
+/* ---------- 簡易音節切分（可手動修正） ---------- */
+function syllabify(w){
+  w=w.toLowerCase().replace(/[^a-z]/g,'');
+  if(w.length<=3)return [w];
+  const isV=(c,i)=>'aeiou'.includes(c)||(c==='y'&&i>0);
+  const silentE=w.endsWith('e')&&!isV(w[w.length-2],w.length-2)&&!/[^aeiouy]le$/.test(w);
+  const end=silentE?w.length-1:w.length;
+  const g=[];
+  for(let i=0;i<end;){
+    if(isV(w[i],i)){let j=i;while(j<end&&isV(w[j],j))j++;g.push([i,j]);i=j}else i++;
+  }
+  if(g.length<=1)return [w];
+  const cuts=[];
+  for(let k=0;k<g.length-1;k++){
+    const a=g[k][1],b=g[k+1][0],n=b-a,cl=w.slice(a,b);
+    let c;
+    if(n<=1)c=a;
+    else if(cl.startsWith('ck'))c=a+2;
+    else if(/^(th|sh|ch|ph|wh)/.test(cl))c=a;
+    else c=a+1;
+    cuts.push(c);
+  }
+  const out=[];let p=0;
+  for(const c of cuts){out.push(w.slice(p,c));p=c}
+  out.push(w.slice(p));
+  const n=out.length;
+  if(n>1&&out[n-1]==='le'&&out[n-2].length>1&&!isV(out[n-2].slice(-1),1)){
+    out[n-1]=out[n-2].slice(-1)+'le';out[n-2]=out[n-2].slice(0,-1);
+  }
+  return out.filter(Boolean);
+}
+
+/* ---------- 語音 ---------- */
+let voice=null;
+function pickVoice(){
+  if(!('speechSynthesis' in window))return;
+  const vs=speechSynthesis.getVoices().filter(v=>/^en[-_]US/i.test(v.lang));
+  voice=vs.find(v=>/samantha|google us|aria|jenny|zira|female/i.test(v.name))||vs[0]||null;
+}
+if('speechSynthesis' in window){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
+function say(text,rate=0.85){
+  return new Promise(res=>{
+    if(!('speechSynthesis' in window)){toast('這個瀏覽器不支援發音');return res()}
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='en-US';u.rate=rate;u.pitch=1.05;if(voice)u.voice=voice;
+    let done=false;const fin=()=>{if(!done){done=true;res()}};
+    u.onend=fin;u.onerror=fin;
+    setTimeout(fin,6000);
+    speechSynthesis.speak(u);
+  });
+}
+function lev(a,b){
+  const d=Array.from({length:a.length+1},(_,i)=>[i]);
+  for(let j=1;j<=b.length;j++)d[0][j]=j;
+  for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)
+    d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+  return d[a.length][b.length];
+}
+/* 回傳 null=不支援, undefined=失敗/沒權限, []=沒聽到, [..]=候選文字 */
+function listen(){
+  return new Promise(res=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR)return res(null);
+    let done=false;const fin=v=>{if(!done){done=true;res(v)}};
+    try{
+      const r=new SR();r.lang='en-US';r.maxAlternatives=5;r.interimResults=false;
+      r.onresult=e=>fin([...e.results[0]].map(a=>a.transcript));
+      r.onerror=e=>fin(e.error==='no-speech'?[]:undefined);
+      r.onend=()=>fin([]);
+      r.start();
+    }catch(e){fin(undefined)}
+  });
+}
+function judge(target,alts){
+  const t=target.toLowerCase();
+  let best=99;
+  for(const a of alts){
+    for(const w of a.toLowerCase().replace(/[^a-z' ]/g,'').split(/\s+/).filter(Boolean)){
+      best=Math.min(best,lev(w,t));
+    }
+  }
+  if(best===0)return 3;
+  if(best<=1&&t.length>=4)return 2;
+  if(best<=2&&t.length>=6)return 1;
+  return 0;
+}
+
+/* ---------- 共用 ---------- */
+let tt;
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1800)}
+const starStr=n=>'★'.repeat(n)+'☆'.repeat(3-n);
+function sylHTML(x,on=-1,cls=''){
+  return sylOf(x).map((s,i)=>`<span class="syl c${i%4} ${i===on?'on':''} ${cls}" data-i="${i}">${esc(s)}</span>`).join('');
+}
+
+/* ---------- 畫面 ---------- */
+let view='list';
+function go(v){
+  view=v;
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  $('#badge').textContent='⭐ '+totalStars();
+  ({list:renderList,review:renderReview,add:renderAdd})[v]();
+  $('#main').scrollTop=0;
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.v));
+
+function renderList(){
+  const m=$('#main');
+  if(!words.length){m.innerHTML='<div class="empty"><b>🌱</b>還沒有單字<br>到「新增單字」輸入上課的單字吧！</div>';return}
+  m.innerHTML=words.map(x=>`
+    <div class="card row" data-id="${x.id}">
+      <button class="round" data-act="say">🔊</button>
+      <div class="grow" data-act="practice">
+        <div class="w">${esc(x.w)}</div>
+        <div class="zh">${esc(sylOf(x).join(' · '))}${x.zh?' ｜ '+esc(x.zh):''}</div>
+        <div class="stars">${starStr(x.stars)}</div>
+      </div>
+      <button class="ico" data-act="edit">✏️</button>
+    </div>`).join('');
+  m.onclick=e=>{
+    const el=e.target.closest('[data-act]');if(!el)return;
+    const id=el.closest('[data-id]').dataset.id,x=words.find(w=>w.id===id);
+    if(el.dataset.act==='say')say(x.w);
+    if(el.dataset.act==='practice')openPractice(id);
+    if(el.dataset.act==='edit')openEdit(id);
+  };
+}
+
+function renderAdd(){
+  $('#main').onclick=null;
+  $('#main').innerHTML=`
+    <div class="card">
+      <label>輸入單字（一行一個，後面可接中文意思）</label>
+      <textarea id="inp" placeholder="apple 蘋果&#10;banana 香蕉&#10;beautiful 美麗的"></textarea>
+      <p class="hint">💡 想自己指定音節可用連字號，例如 <b>but-ter-fly 蝴蝶</b>。沒指定的話系統會自動切，切錯可以在單字本按 ✏️ 修改。</p>
+      <div class="btns"><button class="btn" id="addBtn">加入單字本</button></div>
+    </div>`;
+  $('#addBtn').onclick=()=>{
+    const lines=$('#inp').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    let n=0;
+    for(const ln of lines){
+      const m=ln.match(/^([A-Za-z][A-Za-z'\-]*)[\s,，:：]*(.*)$/);
+      if(!m)continue;
+      const raw=m[1].replace(/'/g,'');
+      const hasDash=raw.includes('-');
+      const plain=raw.replace(/-/g,'').toLowerCase();
+      if(words.some(w=>w.w===plain))continue;
+      words.push(mk(plain,m[2],hasDash?raw.toLowerCase():null));n++;
+    }
+    save();toast(n?`已加入 ${n} 個單字 🎉`:'沒有新單字可加入');
+    if(n)go('list');
+  };
+}
+
+/* 編輯 */
+function openEdit(id){
+  const x=words.find(w=>w.id===id),s=$('#sheet');
+  s.innerHTML=`<div class="pane">
+    <label>英文</label><input id="eW" value="${esc(x.w)}" autocapitalize="off">
+    <label>中文意思</label><input id="eZ" value="${esc(x.zh)}">
+    <label>音節（用 - 分開，例如 el-e-phant）</label><input id="eS" value="${esc(x.syl)}" autocapitalize="off">
+    <div class="btns"><button class="btn ghost" id="eC">取消</button><button class="btn green" id="eOk">儲存</button></div>
+    <div class="btns"><button class="btn ghost" id="eD" style="color:var(--red)">刪除這個單字</button></div>
+  </div>`;
+  s.classList.add('show');
+  s.onclick=e=>{if(e.target===s)s.classList.remove('show')};
+  $('#eC').onclick=()=>s.classList.remove('show');
+  $('#eW').oninput=()=>{$('#eS').value=syllabify($('#eW').value).join('-')};
+  $('#eOk').onclick=()=>{
+    const w=$('#eW').value.trim().toLowerCase().replace(/[^a-z'-]/g,'').replace(/-/g,'');
+    if(!w)return toast('請輸入英文單字');
+    let sy=$('#eS').value.trim().toLowerCase().replace(/[^a-z-]/g,'');
+    if(sy.replace(/-/g,'')!==w.replace(/'/g,''))sy=syllabify(w).join('-');
+    Object.assign(x,{w,zh:$('#eZ').value.trim(),syl:sy});
+    save();s.classList.remove('show');go(view);
+  };
+  $('#eD').onclick=()=>{
+    if(confirm(`確定刪除「${x.w}」？`)){words=words.filter(w=>w!==x);save();s.classList.remove('show');go(view)}
+  };
+}
+
+/* ---------- 複習 ---------- */
+let R=null;
+function renderReview(){
+  const m=$('#main');m.onclick=null;
+  if(!words.length){m.innerHTML='<div class="empty"><b>🎴</b>先新增一些單字再來複習喔</div>';return}
+  if(!R||R.i>=R.q.length){
+    const q=[...words].sort((a,b)=>a.stars-b.stars||Math.random()-.5).map(x=>x.id);
+    R={q,i:0,zh:false};
+  }
+  const x=words.find(w=>w.id===R.q[R.i]);
+  if(!x){R=null;return renderReview()}
+  m.innerHTML=`
+    <p class="sub">第 ${R.i+1} / ${R.q.length} 張　${starStr(x.stars)}</p>
+    <div class="card" style="padding:22px 12px">
+      <div class="bigw">${esc(x.w)}</div>
+      <div class="sylrow" style="margin:8px 0 4px">${sylHTML(x)}</div>
+      <div class="sub" style="font-size:18px;min-height:28px">${R.zh?esc(x.zh||'（沒有輸入中文）'):''}</div>
+    </div>
+    <div class="btns"><button class="btn blue" id="rSay">🔊 聽發音</button><button class="btn ghost" id="rZh">👀 看中文</button></div>
+    <div class="btns"><button class="btn purple" id="rPr">🎤 引導練習</button></div>
+    <div class="btns"><button class="btn ghost" id="rNo">還不熟 →</button><button class="btn green" id="rOk">我會了 ✓</button></div>`;
+  $('#rSay').onclick=()=>say(x.w);
+  $('#rZh').onclick=()=>{R.zh=!R.zh;renderReview()};
+  $('#rPr').onclick=()=>openPractice(x.id);
+  $('#rNo').onclick=()=>{R.i++;R.zh=false;renderReview()};
+  $('#rOk').onclick=()=>{x.stars=Math.min(3,x.stars+1);save();$('#badge').textContent='⭐ '+totalStars();R.i++;R.zh=false;
+    if(R.i>=R.q.length){toast('這一輪複習完成！🎉');R=null}renderReview()};
+  setTimeout(()=>say(x.w),250);
+}
+
+/* ---------- 引導式發音 ---------- */
+let P=null,runId=0;
+const STEP_NAMES=['聽一聽','拆開唸','合起來','換你唸'];
+function openPractice(id){
+  P={id,stage:0,res:null,rec:false};
+  $('#practice').classList.add('show');
+  renderP();
+  autoStage();
+}
+function closePractice(){
+  runId++;P=null;speechSynthesis&&speechSynthesis.cancel();
+  $('#practice').classList.remove('show');go(view);
+}
+const cur=()=>words.find(w=>w.id===P.id);
+function renderP(){
+  const x=cur(),n=sylOf(x).length,st=P.stage,el=$('#practice');
+  let body='';
+  if(st===0){
+    body=`<div class="title">先仔細聽 👂</div>
+      <div class="bigw" style="margin-top:30px">${esc(x.w)}</div>
+      <div class="sub">${esc(x.zh)}</div>
+      <div class="spacer"></div>
+      <div class="btns"><button class="btn blue" id="a1">🔊 正常速度</button><button class="btn pink" id="a2">🐢 慢慢聽</button></div>`;
+  }else if(st===1){
+    body=`<div class="title">一個音節一個音節 ✂️</div>
+      <div class="sub">${n>1?'點每一格都可以聽，再跟著唸':'這個單字只有一個音節'}</div>
+      <div class="sylrow" id="sylrow">${sylHTML(x)}</div>
+      <div class="spacer"></div>
+      <div class="btns"><button class="btn pink" id="a1">▶ 自動示範</button></div>`;
+  }else if(st===2){
+    body=`<div class="title">把它們連起來 🧩</div>
+      <div class="sub">跟著亮起來的順序，慢慢唸出整個字</div>
+      <div style="text-align:center;margin:26px 0"><div class="join" id="sylrow">${sylHTML(x)}</div></div>
+      <div class="bigw" style="font-size:34px">${esc(x.w)}</div>
+      <div class="spacer"></div>
+      <div class="btns"><button class="btn pink" id="a1">▶ 連起來唸</button><button class="btn blue" id="a2">🔊 正常速度</button></div>`;
+  }else{
+    const r=P.res;
+    let res='';
+    if(r){
+      res=r.kind==='ok'?`<div class="result" style="color:var(--green)">${['','有點接近了，再試一次！','很好！快要完美了 👍','太棒了！唸得很準 🎉'][r.score]}${r.score?'':'<span style="color:var(--red)">再聽一次，慢慢唸 💪</span>'}<small>聽到：${esc(r.heard||'（沒聽清楚）')}</small></div>`
+        :r.kind==='unsup'?`<div class="result">這個瀏覽器無法自動聽辨<small>跟著唸出來，然後自己或請大人評分</small></div>`
+        :`<div class="result" style="color:var(--red)">沒辦法使用麥克風<small>請在瀏覽器允許麥克風權限</small></div>`;
+    }
+    body=`<div class="title">換你唸囉！🎤</div>
+      <div class="bigw" style="margin-top:14px">${esc(x.w)}</div>
+      <div class="sylrow" style="margin:4px 0">${sylHTML(x)}</div>
+      <button class="mic ${P.rec?'rec':''}" id="mic">${P.rec?'👂':'🎤'}</button>
+      <div class="sub">${P.rec?'聽你唸中…':'按一下麥克風，然後唸出單字'}</div>
+      ${res}
+      <div class="spacer"></div>
+      ${r&&r.kind==='unsup'?`<div class="btns"><button class="btn ghost" id="self0">再練習</button><button class="btn green" id="self1">我唸得很好 ✓</button></div>`:''}
+      <div class="btns"><button class="btn blue" id="a1">🔊 再聽一次示範</button>${r&&r.score>=2?'<button class="btn green" id="fin">完成 ✓</button>':''}</div>`;
+  }
+  el.innerHTML=`
+    <div class="ptop"><button class="ico" id="pClose" style="font-size:26px">✕</button><b>${esc(x.w)}</b><span class="stars">${starStr(x.stars)}</span></div>
+    <div class="steps">${STEP_NAMES.map((_,i)=>`<div class="dot ${i<st?'done':i===st?'now':''}"></div>`).join('')}</div>
+    <div class="pbody">${body}
+      ${st<3?`<div class="btns"><button class="btn ${st===0?'':'green'}" id="next">下一步 →</button></div>`:''}
+      ${st>0?`<div class="btns" style="margin-top:8px"><button class="btn ghost" id="prev" style="padding:10px">← 上一步</button></div>`:''}
+    </div>`;
+  bindP();
+}
+function bindP(){
+  const st=P.stage,x=cur();
+  $('#pClose').onclick=closePractice;
+  const nx=$('#next');if(nx)nx.onclick=()=>{runId++;P.stage++;P.res=null;renderP();autoStage()};
+  const pv=$('#prev');if(pv)pv.onclick=()=>{runId++;P.stage--;P.res=null;renderP()};
+  const a1=$('#a1'),a2=$('#a2');
+  if(st===0){a1.onclick=()=>say(x.w,.85);a2.onclick=()=>say(x.w,.45)}
+  if(st===1){
+    a1.onclick=()=>playSyl();
+    $('#sylrow').onclick=e=>{const s=e.target.closest('.syl');if(!s)return;const i=+s.dataset.i;hl(i);say(sylOf(x)[i],.5).then(()=>hl(-1))};
+  }
+  if(st===2){a1.onclick=()=>playJoin();a2.onclick=()=>say(x.w,.85)}
+  if(st===3){
+    a1.onclick=()=>say(x.w,.85);
+    $('#mic').onclick=doMic;
+    const f=$('#fin');if(f)f.onclick=closePractice;
+    const s0=$('#self0'),s1=$('#self1');
+    if(s0)s0.onclick=()=>{P.res=null;renderP()};
+    if(s1)s1.onclick=()=>{award(3);closePractice()};
+  }
+}
+function hl(i){document.querySelectorAll('#sylrow .syl').forEach((s,k)=>s.classList.toggle('on',k===i))}
+function autoStage(){
+  const my=++runId,x=cur();
+  setTimeout(()=>{if(my!==runId)return;
+    if(P.stage===0)say(x.w,.85);
+    if(P.stage===1)playSyl();
+    if(P.stage===2)playJoin();
+    if(P.stage===3)say(x.w,.85);
+  },350);
+}
+async function playSyl(){
+  const my=++runId,x=cur(),a=sylOf(x);
+  for(let i=0;i<a.length;i++){
+    if(my!==runId)return;
+    hl(i);await say(a[i],.5);await sleep(350);
+  }
+  if(my===runId){hl(-1)}
+}
+async function playJoin(){
+  const my=++runId,x=cur(),a=sylOf(x);
+  const total=Math.max(1200,x.w.length*210);
+  const per=total/a.length;
+  const p=say(x.w,.45);
+  for(let i=0;i<a.length;i++){if(my!==runId)return;hl(i);await sleep(per)}
+  await p;if(my===runId)hl(-1);
+}
+function award(score){
+  const x=cur();
+  if(score>=2)x.stars=Math.min(3,x.stars+1);
+  save();
+}
+async function doMic(){
+  if(P.rec)return;
+  const x=cur();
+  speechSynthesis.cancel();
+  P.rec=true;P.res=null;renderP();
+  const r=await listen();
+  P.rec=false;
+  if(r===null)P.res={kind:'unsup'};
+  else if(r===undefined)P.res={kind:'err'};
+  else{const sc=r.length?judge(x.w,r):0;P.res={kind:'ok',score:sc,heard:r[0]||''};award(sc)}
+  if(P)renderP();
+}
+
+/* ---------- 啟動 ---------- */
+go('list');
+if('serviceWorker' in navigator&&location.protocol!=='file:'){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
