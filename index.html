@@ -117,7 +117,7 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(words))}catch(e){}}
 function mk(w,zh,syl){
   w=w.toLowerCase();
   return{id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),w:w.replace(/-/g,''),zh:zh||'',
-    syl:syl||syllabify(w.replace(/-/g,'')).join('-'),stars:0};
+    syl:syl||syllabify(w.replace(/-/g,'')).join('-'),stars:0,sylFixed:!!syl};
 }
 const sylOf=x=>x.syl.split('-').filter(Boolean);
 const totalStars=()=>words.reduce((a,x)=>a+x.stars,0);
@@ -152,6 +152,78 @@ function syllabify(w){
     out[n-1]=out[n-2].slice(-1)+'le';out[n-2]=out[n-2].slice(0,-1);
   }
   return out.filter(Boolean);
+}
+
+/* ---------- 自動查詢：中文意思 + 音節數校正 ---------- */
+async function fetchJSON(url){
+  const c=new AbortController(),t=setTimeout(()=>c.abort(),8000);
+  try{return await (await fetch(url,{signal:c.signal})).json()}finally{clearTimeout(t)}
+}
+/* 回傳中文字串；'' 表示查不到；null 表示網路失敗 */
+async function lookupZh(w){
+  try{
+    const d=await fetchJSON('https://api.mymemory.translated.net/get?q='+encodeURIComponent(w)+'&langpair=en|zh-TW');
+    const t=((d.responseData&&d.responseData.translatedText)||'').trim();
+    if(!t||/MYMEMORY|INVALID/i.test(t)||/^[\x00-\x7f]+$/.test(t))return '';
+    return t;
+  }catch(e){return null}
+}
+/* 字典上的音節數；0 表示查不到 */
+async function lookupCount(w){
+  try{
+    const d=await fetchJSON('https://api.datamuse.com/words?sp='+encodeURIComponent(w)+'&md=s&max=1');
+    return d[0]&&d[0].word===w?(d[0].numSyllables||0):0;
+  }catch(e){return 0}
+}
+/* 依字典音節數 n 調整切分：太多就合併、太少就拆開 ia/io/eo/ua 這類連續母音 */
+function fitSyl(a,n){
+  a=[...a];
+  while(a.length>n&&a.length>1){
+    let k=0,m=1e9;
+    for(let i=0;i<a.length-1;i++){const l=a[i].length+a[i+1].length;if(l<m){m=l;k=i}}
+    a.splice(k,2,a[k]+a[k+1]);
+  }
+  while(a.length<n){
+    const i=a.findIndex(s=>/(i[aeou]|u[ao]|eo)/.test(s));
+    if(i<0)break;
+    const p=a[i].search(/(i[aeou]|u[ao]|eo)/)+1;
+    a.splice(i,1,a[i].slice(0,p),a[i].slice(p));
+  }
+  return a.filter(Boolean);
+}
+/* 回傳 true=有更新, false=沒變, 'off'=網路失敗 */
+async function enrich(x,force){
+  let ch=false;
+  if(!x.zh&&(force||!x.tried)){
+    const z=await lookupZh(x.w);
+    if(z===null)return 'off';
+    x.tried=true;
+    if(z){x.zh=z;ch=true}
+  }
+  if(!x.sylFixed){
+    const n=await lookupCount(x.w);
+    if(n){
+      const a=sylOf(x);
+      if(a.length!==n){x.syl=fitSyl(a,n).join('-');ch=true}
+      x.sylFixed=true;
+    }
+  }
+  save();
+  return ch;
+}
+let enriching=false;
+async function enrichAll(){
+  if(enriching)return;
+  enriching=true;
+  let n=0;
+  for(const x of words.filter(w=>(!w.zh&&!w.tried)||!w.sylFixed)){
+    const r=await enrich(x);
+    if(r==='off')break;
+    if(r)n++;
+    if(view==='list')renderList();
+  }
+  enriching=false;
+  return n;
 }
 
 /* ---------- 語音 ---------- */
@@ -237,7 +309,7 @@ function renderList(){
       <button class="round" data-act="say">🔊</button>
       <div class="grow" data-act="practice">
         <div class="w">${esc(x.w)}</div>
-        <div class="zh">${esc(sylOf(x).join(' · '))}${x.zh?' ｜ '+esc(x.zh):''}</div>
+        <div class="zh">${esc(sylOf(x).join(' · '))}${x.zh?' ｜ '+esc(x.zh):(!x.tried?' ｜ 🔍 查詢中…':'')}</div>
         <div class="stars">${starStr(x.stars)}</div>
       </div>
       <button class="ico" data-act="edit">✏️</button>
@@ -255,9 +327,9 @@ function renderAdd(){
   $('#main').onclick=null;
   $('#main').innerHTML=`
     <div class="card">
-      <label>輸入單字（一行一個，後面可接中文意思）</label>
-      <textarea id="inp" placeholder="apple 蘋果&#10;banana 香蕉&#10;beautiful 美麗的"></textarea>
-      <p class="hint">💡 想自己指定音節可用連字號，例如 <b>but-ter-fly 蝴蝶</b>。沒指定的話系統會自動切，切錯可以在單字本按 ✏️ 修改。</p>
+      <label>輸入單字（一行一個就好）</label>
+      <textarea id="inp" placeholder="apple&#10;banana&#10;beautiful"></textarea>
+      <p class="hint">💡 中文意思和音節都會<b>自動查詢</b>（需要連網）。查到的不準時，可在單字本按 ✏️ 修改。也可以自己指定：<b>but-ter-fly 蝴蝶</b>。</p>
       <div class="btns"><button class="btn" id="addBtn">加入單字本</button></div>
     </div>`;
   $('#addBtn').onclick=()=>{
@@ -272,8 +344,8 @@ function renderAdd(){
       if(words.some(w=>w.w===plain))continue;
       words.push(mk(plain,m[2],hasDash?raw.toLowerCase():null));n++;
     }
-    save();toast(n?`已加入 ${n} 個單字 🎉`:'沒有新單字可加入');
-    if(n)go('list');
+    save();toast(n?`已加入 ${n} 個單字，自動查詢中… 🔍`:'沒有新單字可加入');
+    if(n){go('list');enrichAll().then(c=>{if(c)toast('查詢完成 ✅');else if(c===0)toast('查不到，可以按 ✏️ 手動輸入')})}
   };
 }
 
@@ -284,6 +356,7 @@ function openEdit(id){
     <label>英文</label><input id="eW" value="${esc(x.w)}" autocapitalize="off">
     <label>中文意思</label><input id="eZ" value="${esc(x.zh)}">
     <label>音節（用 - 分開，例如 el-e-phant）</label><input id="eS" value="${esc(x.syl)}" autocapitalize="off">
+    <div class="btns"><button class="btn ghost" id="eAuto">🔍 自動查詢中文和音節</button></div>
     <div class="btns"><button class="btn ghost" id="eC">取消</button><button class="btn green" id="eOk">儲存</button></div>
     <div class="btns"><button class="btn ghost" id="eD" style="color:var(--red)">刪除這個單字</button></div>
   </div>`;
@@ -291,12 +364,23 @@ function openEdit(id){
   s.onclick=e=>{if(e.target===s)s.classList.remove('show')};
   $('#eC').onclick=()=>s.classList.remove('show');
   $('#eW').oninput=()=>{$('#eS').value=syllabify($('#eW').value).join('-')};
+  $('#eAuto').onclick=async()=>{
+    const w=$('#eW').value.trim().toLowerCase().replace(/[^a-z]/g,'');
+    if(!w)return toast('請先輸入英文');
+    toast('查詢中…');
+    const [z,n]=await Promise.all([lookupZh(w),lookupCount(w)]);
+    if(z===null)return toast('連不上網路，稍後再試');
+    if(z)$('#eZ').value=z;
+    const a=syllabify(w);
+    $('#eS').value=(n?fitSyl(a,n):a).join('-');
+    toast(z?'已填入，確認後按儲存':'查不到中文，音節已更新');
+  };
   $('#eOk').onclick=()=>{
     const w=$('#eW').value.trim().toLowerCase().replace(/[^a-z'-]/g,'').replace(/-/g,'');
     if(!w)return toast('請輸入英文單字');
     let sy=$('#eS').value.trim().toLowerCase().replace(/[^a-z-]/g,'');
     if(sy.replace(/-/g,'')!==w.replace(/'/g,''))sy=syllabify(w).join('-');
-    Object.assign(x,{w,zh:$('#eZ').value.trim(),syl:sy});
+    Object.assign(x,{w,zh:$('#eZ').value.trim(),syl:sy,tried:true,sylFixed:true});
     save();s.classList.remove('show');go(view);
   };
   $('#eD').onclick=()=>{
@@ -464,6 +548,7 @@ async function doMic(){
 
 /* ---------- 啟動 ---------- */
 go('list');
+enrichAll();
 if('serviceWorker' in navigator&&location.protocol!=='file:'){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
